@@ -33,6 +33,9 @@ class JSX {
     }
     async render(component, props) {
         let didError = false;
+        const ctx = __classPrivateFieldGet(this, _JSX_context, "f");
+        if (!ctx)
+            throw new Error('Must provide HTTP ctx');
         return new Promise(async (resolve, reject) => {
             const Component = component;
             const sharedValuesPrepared = {};
@@ -49,9 +52,8 @@ class JSX {
                             next();
                         }
                     });
-                    __classPrivateFieldGet(this, _JSX_context, "f").response.implicitEnd = false;
-                    __classPrivateFieldGet(this, _JSX_context, "f").response.status(didError ? 500 : 200);
-                    __classPrivateFieldGet(this, _JSX_context, "f").response.header('content-type', 'text/html');
+                    ctx.response.status(didError ? 500 : 200);
+                    ctx.response.header('content-type', 'text/html');
                     pipe(writable);
                     writable.on('finish', () => {
                         resolve(data);

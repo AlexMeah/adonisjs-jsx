@@ -20,6 +20,9 @@ export default class JSX {
 
   public async render(component: () => JSX.Element, props?: Record<any, any>) {
     let didError = false;
+    const ctx = this.#context;
+
+    if (!ctx) throw new Error('Must provide HTTP ctx');
 
     return new Promise(async (resolve, reject) => {
       const Component = component
@@ -43,9 +46,8 @@ export default class JSX {
             }
           });
 
-          this.#context.response.implicitEnd = false;
-          this.#context.response.status(didError ? 500 : 200);
-          this.#context.response.header('content-type', 'text/html');
+          ctx.response.status(didError ? 500 : 200);
+          ctx.response.header('content-type', 'text/html');
 
           pipe(writable);
 
