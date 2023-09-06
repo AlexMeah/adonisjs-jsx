@@ -18,6 +18,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const jsx_runtime_1 = require("react/jsx-runtime");
 const server_1 = require("react-dom/server");
 const Context_1 = __importDefault(require("./Context"));
+const stream_1 = __importDefault(require("stream"));
 class JSX {
     constructor() {
         _JSX_shared.set(this, {});
@@ -31,12 +32,40 @@ class JSX {
         __classPrivateFieldGet(this, _JSX_shared, "f")[key] = data;
     }
     async render(component, props) {
-        const Component = component;
-        const sharedValuesPrepared = {};
-        for (const key in __classPrivateFieldGet(this, _JSX_shared, "f")) {
-            sharedValuesPrepared[key] = await __classPrivateFieldGet(this, _JSX_shared, "f")[key]();
-        }
-        return (0, server_1.renderToString)((0, jsx_runtime_1.jsx)(Context_1.default.Provider, { value: { ctx: __classPrivateFieldGet(this, _JSX_context, "f"), shared: sharedValuesPrepared, props }, children: (0, jsx_runtime_1.jsx)(Component, { ...props }) }));
+        let didError = false;
+        return new Promise(async (resolve, reject) => {
+            const Component = component;
+            const sharedValuesPrepared = {};
+            for (const key in __classPrivateFieldGet(this, _JSX_shared, "f")) {
+                sharedValuesPrepared[key] = await __classPrivateFieldGet(this, _JSX_shared, "f")[key]();
+            }
+            const { pipe } = (0, server_1.renderToPipeableStream)((0, jsx_runtime_1.jsx)(Context_1.default.Provider, { value: { ctx: __classPrivateFieldGet(this, _JSX_context, "f"), shared: sharedValuesPrepared, props }, children: (0, jsx_runtime_1.jsx)(Component, { ...props }) }), {
+                onAllReady() {
+                    // Cleaner way to pipe this?
+                    let data = '';
+                    const writable = new stream_1.default.Writable({
+                        write: function (chunk, _, next) {
+                            data += chunk.toString();
+                            next();
+                        }
+                    });
+                    __classPrivateFieldGet(this, _JSX_context, "f").response.implicitEnd = false;
+                    __classPrivateFieldGet(this, _JSX_context, "f").response.status(didError ? 500 : 200);
+                    __classPrivateFieldGet(this, _JSX_context, "f").response.header('content-type', 'text/html');
+                    pipe(writable);
+                    writable.on('finish', () => {
+                        resolve(data);
+                    });
+                },
+                onShellError(error) {
+                    reject(error);
+                },
+                onError(error) {
+                    didError = true;
+                    console.error(error);
+                },
+            });
+        });
     }
 }
 _JSX_shared = new WeakMap(), _JSX_context = new WeakMap();

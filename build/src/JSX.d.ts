@@ -5,5 +5,5 @@ export default class JSX {
         context: HttpContextContract;
     }): this;
     share(key: string, data: any): void;
-    render(component: () => JSX.Element, props?: Record<any, any>): Promise<string>;
+    render(component: () => JSX.Element, props?: Record<any, any>): Promise<unknown>;
 }

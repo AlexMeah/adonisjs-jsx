@@ -1,7 +1,8 @@
 import type { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 
-import { renderToString } from 'react-dom/server'
+import { renderToPipeableStream } from 'react-dom/server'
 import Context from './Context'
+import stream from 'stream'
 
 export default class JSX {
   #shared: Record<string, any> = {}
@@ -18,17 +19,49 @@ export default class JSX {
   }
 
   public async render(component: () => JSX.Element, props?: Record<any, any>) {
-    const Component = component
-    const sharedValuesPrepared = {}
+    let didError = false;
 
-    for (const key in this.#shared) {
-      sharedValuesPrepared[key] = await this.#shared[key]()
-    }
+    return new Promise(async (resolve, reject) => {
+      const Component = component
+      const sharedValuesPrepared = {}
 
-    return renderToString(
-      <Context.Provider value={{ ctx: this.#context, shared: sharedValuesPrepared, props }}>
-        <Component {...props} />
-      </Context.Provider>
-    )
+      for (const key in this.#shared) {
+        sharedValuesPrepared[key] = await this.#shared[key]()
+      }
+
+      const { pipe } = renderToPipeableStream(
+        <Context.Provider value={{ ctx: this.#context, shared: sharedValuesPrepared, props }}>
+          <Component {...props} />
+        </Context.Provider>, {
+        onAllReady() {
+          // Cleaner way to pipe this?
+          let data = '';
+          const writable = new stream.Writable({
+            write: function (chunk, _, next) {
+              data += chunk.toString();
+              next();
+            }
+          });
+
+          this.#context.response.implicitEnd = false;
+          this.#context.response.status(didError ? 500 : 200);
+          this.#context.response.header('content-type', 'text/html');
+
+          pipe(writable);
+
+          writable.on('finish', () => {
+            resolve(data);
+          });
+        },
+        onShellError(error) {
+          reject(error);
+        },
+        onError(error) {
+          didError = true;
+          console.error(error);
+        },
+      }
+      )
+    })
   }
 }
